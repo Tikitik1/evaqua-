@@ -1,2 +1,34 @@
+# Streamlit Cloud Configuration
+# Este archivo optimiza el rendimiento en Streamlit Cloud
+
 [server]
+# Desactivar file watcher para evitar reinicios en bucle
+fileWatcherType = "none"
+
+# Aumentar límite de mensajes para mapas grandes
 maxMessageSize = 500
+
+# Permitir más tiempo para la carga inicial
+headless = true
+runOnSave = false
+
+[runner]
+# Evitar recargas automáticas en producción
+magicEnabled = true
+fastReruns = false
+
+[client]
+# Optimizaciones de cliente
+showErrorDetails = false
+toolbarMode = "minimal"
+
+[logger]
+# Reducir logging en producción
+level = "error"
+messageFormat = "%(asctime)s %(message)s"
+
+[browser]
+# Configuración del navegador
+gatherUsageStats = false
+serverAddress = "0.0.0.0"
+serverPort = 8501

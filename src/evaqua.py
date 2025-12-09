@@ -24,10 +24,20 @@ from shapely.geometry import box, Point
 import warnings
 from . import config
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner="Cargando datos geoespaciales...")
 def load_shapefile_cached(path):
-    """Carga shapefile con caché"""
-    return gpd.read_file(path).to_crs(epsg=4326)
+    """Carga shapefile con caché y manejo de errores"""
+    try:
+        gdf = gpd.read_file(path)
+        if gdf.crs is None:
+            logger.warning(f"⚠️ {path} no tiene CRS definido, asumiendo EPSG:4326")
+            gdf = gdf.set_crs(epsg=4326)
+        elif gdf.crs.to_epsg() != 4326:
+            gdf = gdf.to_crs(epsg=4326)
+        return gdf
+    except Exception as e:
+        logger.error(f"❌ Error cargando {path}: {e}")
+        raise
 
 warnings.filterwarnings('ignore')
 

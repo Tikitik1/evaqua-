@@ -18,8 +18,8 @@ import os
 # Imports locales
 from src.evaqua import EVAQUACalculator, RISK_LEVELS
 
-# Configuración de logging para depuración total
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# Configuración de logging - WARNING en producción para evitar spam
+logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # ==================== CONFIGURACIÓN ====================
@@ -43,8 +43,12 @@ def init_evaqua():
 
 @st.cache_resource(show_spinner=False, ttl=3600)
 def load_evaqua_analysis():
-    """Carga análisis completo de EVAQUA con caché persistente"""
+    """Carga análisis completo de EVAQUA con caché persistente y lazy loading"""
     try:
+        # Mostrar progreso para mantener vivo el health check
+        progress_placeholder = st.empty()
+        
+        progress_placeholder.info("🔄 Inicializando EVAQUA...")
         calculator = init_evaqua()
         
         import os
@@ -56,16 +60,34 @@ def load_evaqua_analysis():
         cuencas_file = os.path.join("data", "cuencas", "cuencas.geojson")
         subcuencas_file = os.path.join("data", "subcuencas", "Subcuencas_Aysen_Magallanes.shp")
         
-        # Ejecutar análisis solo si no está en caché
-        results_gdf = calculator.run_full_analysis(glaciers_shp, regions_shp,
-                                                    cuencas_file=cuencas_file,
-                                                    subcuencas_file=subcuencas_file)
+        # Paso 1: Cargar datos base
+        progress_placeholder.info("📂 Cargando datos geoespaciales (1/4)...")
+        calculator.load_base_data(glaciers_shp, regions_shp, cuencas_file, subcuencas_file)
+        
+        # Paso 2: Topografía
+        progress_placeholder.info("🏔️ Obteniendo topografía (2/4)...")
+        calculator.get_topography_for_grids()
+        
+        # Paso 3: Clima
+        progress_placeholder.info("🌡️ Consultando datos climáticos (3/4)...")
+        calculator.get_climate_data()
+        
+        # Paso 4: Cálculos finales
+        progress_placeholder.info("⚙️ Calculando riesgos (4/4)...")
+        calculator.calculate_melt()
+        calculator.calculate_runoff()
+        calculator.calculate_risk()
+        
+        results_gdf = calculator.get_results()
+        
+        progress_placeholder.success("✅ Datos cargados exitosamente")
         
         return calculator, results_gdf
     except Exception as e:
         logger.error(f"Error loading EVAQUA analysis: {e}")
         import traceback
         logger.error(traceback.format_exc())
+        st.error(f"❌ Error al cargar datos: {str(e)}")
         raise
 
 # ==================== TEMA Y ESTILO ====================
