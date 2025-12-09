@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 from pathlib import Path
 import logging
+import streamlit as st
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -73,6 +74,7 @@ class RealDataProvider:
     _aysen_zones = None   # Cache para las zonas
 
     @staticmethod
+    @st.cache_data(ttl=3600)
     def load_aysen_region() -> Optional[gpd.GeoDataFrame]:
         """Carga el shapefile de la región de Aysén"""
         if RealDataProvider._aysen_region is not None:
@@ -102,6 +104,7 @@ class RealDataProvider:
             return None
 
     @staticmethod
+    @st.cache_data(ttl=3600)
     def create_zone_grid(n_zones: int = 30) -> List[dict]:
         """
         Crea una cuadrícula de zonas dentro de la región de Aysén
@@ -167,6 +170,7 @@ class RealDataProvider:
             return RealDataProvider.AYSEN_ZONES
 
     @staticmethod
+    @st.cache_data(ttl=3600)
     def get_temperature_data(lat: float, lon: float, days: int = 30) -> Dict:
         """
         Obtiene datos de temperatura real de OpenMeteo
@@ -222,6 +226,7 @@ class RealDataProvider:
             }
 
     @staticmethod
+    @st.cache_data(ttl=3600)
     def get_zone_temperature(zone_id: str, lat: float, lon: float) -> Dict:
         """
         Obtiene temperatura para una zona (cachea resultados)
@@ -276,6 +281,7 @@ class RealDataProvider:
             }
 
     @staticmethod
+    @st.cache_data(ttl=3600)
     def get_forecast_data(lat: float, lon: float) -> Dict:
         """
         Obtiene pronóstico de temperatura de OpenMeteo
@@ -313,6 +319,7 @@ class RealDataProvider:
         return {}
 
     @staticmethod
+    @st.cache_data(ttl=3600)
     def load_glaciares_geojson() -> Optional[gpd.GeoDataFrame]:
         """Carga datos de glaciares desde archivos GeoJSON locales (solo Aysén)"""
         try:
@@ -346,6 +353,7 @@ class RealDataProvider:
             return None
 
     @staticmethod
+    @st.cache_data(ttl=3600)
     def load_glaciares_shapefile() -> Optional[gpd.GeoDataFrame]:
         """Carga datos de glaciares desde shapefiles locales (solo Aysén)"""
         try:
@@ -556,6 +564,7 @@ class RealDataProvider:
         return df
 
     @classmethod
+    @st.cache_data(ttl=3600)
     def get_all_glaciers_from_geospatial(cls) -> Optional[pd.DataFrame]:
         """
         Obtiene TODOS los glaciares desde archivos geoespaciales RÁPIDAMENTE

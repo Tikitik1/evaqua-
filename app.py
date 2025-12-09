@@ -264,7 +264,7 @@ def main():
             </h1>
         </div>
         <p style='margin: 0; color: #90caf9; font-size: 1.1rem;'>
-            Sistema de Evaluación de Riesgo de Inundación
+            Sistema de Evaluación de Riesgo de Inundación (Prototipo 2.0 - Region de Aysén)
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -284,22 +284,11 @@ def main():
         # Configuración por defecto de capas (sin sidebar)
         layers = {
             'hru_risk': True,
-            'watershed': False,
+            'subwatershed': True,
+            'watershed': True,
             'glaciers': True,
             'slope': False
         }
-        
-        # Botón de descarga en el header
-        col_dl1, col_dl2, col_dl3 = st.columns([1, 2, 1])
-        with col_dl2:
-            csv = results_gdf.drop(columns=['geometry']).to_csv(index=False)
-            st.download_button(
-                "📥 Descargar Datos CSV",
-                csv,
-                "evaqua_data.csv",
-                "text/csv",
-                use_container_width=True
-            )
 
         
         # === MÓDULO ALERTA AI (GEMINI) ===
@@ -623,7 +612,22 @@ def render_map_tab(results_gdf, layers, calculator):
             tooltip=folium.GeoJsonTooltip(fields=['nom_cuen'], aliases=['Cuenca:'])
          ).add_to(m)
 
-    # === CAPA 3: HRUs (RIESGO) - ENCIMA ===
+    # === CAPA 3: SUBCUENCAS (Medio-Alto) ===
+    if layers.get('subwatershed', True) and calculator.subcuencas_gdf is not None:
+         # Estilo más fino para subcuencas
+         folium.GeoJson(
+            calculator.subcuencas_gdf,
+            name='Subcuencas',
+            style_function=lambda x: {
+                'fillColor': 'transparent',
+                'color': '#4fc3f7', # Azul más claro
+                'weight': 1,
+                'dashArray': '3, 3'
+            },
+            tooltip=folium.GeoJsonTooltip(fields=['NOM_SUBC'], aliases=['Subcuenca:'])
+         ).add_to(m)
+
+    # === CAPA 4: HRUs (RIESGO) - ENCIMA ===
     if layers.get('hru_risk', True):
         # Función de estilo
         def style_function(feature):

@@ -13,6 +13,7 @@ Módulo principal que integra:
 import geopandas as gpd
 import pandas as pd
 import numpy as np
+import streamlit as st
 from pathlib import Path
 import logging
 import io
@@ -22,6 +23,11 @@ import requests
 from shapely.geometry import box, Point
 import warnings
 from . import config
+
+@st.cache_data(ttl=3600)
+def load_shapefile_cached(path):
+    """Carga shapefile con caché"""
+    return gpd.read_file(path).to_crs(epsg=4326)
 
 warnings.filterwarnings('ignore')
 
@@ -98,13 +104,13 @@ class EVAQUACalculator:
         
         try:
             # Cargar glaciares
-            self.glaciers_gdf = gpd.read_file(glaciers_shapefile)
-            self.glaciers_gdf = self.glaciers_gdf.to_crs(epsg=4326)
+            self.glaciers_gdf = load_shapefile_cached(glaciers_shapefile)
+            # self.glaciers_gdf = self.glaciers_gdf.to_crs(epsg=4326) # Ya se hace en el loader
             logger.info(f"✅ {len(self.glaciers_gdf)} glaciares cargados")
             
             # Cargar shapefile regional
-            base_gdf = gpd.read_file(regions_shapefile)
-            base_gdf = base_gdf.to_crs(epsg=4326)
+            base_gdf = load_shapefile_cached(regions_shapefile)
+            # base_gdf = base_gdf.to_crs(epsg=4326)
             
             # Filtrar SOLO la región de Aysén
             # Filtrar SOLO la región de Aysén
@@ -131,8 +137,8 @@ class EVAQUACalculator:
             if cuencas_file:
                 logger.info("🌊 Cargando cuencas hidrográficas...")
                 try:
-                    self.cuencas_gdf = gpd.read_file(cuencas_file)
-                    self.cuencas_gdf = self.cuencas_gdf.to_crs(epsg=4326)
+                    self.cuencas_gdf = load_shapefile_cached(cuencas_file)
+                    # self.cuencas_gdf = self.cuencas_gdf.to_crs(epsg=4326)
                     logger.info(f"✅ {len(self.cuencas_gdf)} cuencas cargadas")
                 except Exception as e:
                     logger.error(f"❌ Error loading cuencas: {e}")
@@ -140,8 +146,8 @@ class EVAQUACalculator:
             if subcuencas_file:
                 logger.info("💧 Cargando subcuencas...")
                 try:
-                    self.subcuencas_gdf = gpd.read_file(subcuencas_file)
-                    self.subcuencas_gdf = self.subcuencas_gdf.to_crs(epsg=4326)
+                    self.subcuencas_gdf = load_shapefile_cached(subcuencas_file)
+                    # self.subcuencas_gdf = self.subcuencas_gdf.to_crs(epsg=4326)
                     logger.info(f"✅ {len(self.subcuencas_gdf)} subcuencas cargadas")
                 except Exception as e:
                     logger.error(f"❌ Error loading subcuencas: {e}")
@@ -183,17 +189,17 @@ class EVAQUACalculator:
                 subcuencas_chile = subcuencas_chile[~subcuencas_chile.geometry.is_empty]
                 logger.info(f"✅ {len(subcuencas_chile)} subcuencas recortadas en territorio chileno")
                 
-                hru_generator = HRUGenerator(subcuencas_chile, glaciers_in_aysen)
-                
-                # Generar HRUs con criterios hidrológicos
-                self.grids_gdf = hru_generator.generate_hrus(
+                # Generar HRUs con criterios hidrológicos (Static Method)
+                self.grids_gdf = HRUGenerator.generate_hrus(
+                    subcuencas_chile, 
+                    glaciers_in_aysen,
                     small_km2=50,
                     medium_km2=200,
                     glacier_density_threshold=5
                 )
                 
-                # Asignar glaciares a HRUs
-                self.grids_gdf = hru_generator.assign_glaciers_to_hrus()
+                # Asignar glaciares a HRUs (Static Method)
+                self.grids_gdf = HRUGenerator.assign_glaciers_to_hrus(self.grids_gdf, glaciers_in_aysen)
                 
                 # Renombrar columna hru_id a grid_id para compatibilidad
                 if 'hru_id' in self.grids_gdf.columns:
@@ -483,7 +489,9 @@ class EVAQUACalculator:
                 points.append({"latitude": lat, "longitude": lon})
         return points, (n, n)
 
-    def _fetch_elevation_batch_optimized(self, points):
+    @staticmethod
+    @st.cache_data(ttl=3600)
+    def _fetch_elevation_batch_optimized(points):
         """
         Consulta OpenTopoData en batches secuenciales.
         Rate limit friendly: 1 request / sec approx.
@@ -633,7 +641,9 @@ class EVAQUACalculator:
         logger.info(f"✅ Clima obtenido para {len(climate_data)} cuadrículas")
         return self.climate_data
     
-    def _fetch_openmeteo_batch(self, lats, lons):
+    @staticmethod
+    @st.cache_data(ttl=3600)
+    def _fetch_openmeteo_batch(lats, lons):
         """
         Consulta Open-Meteo para múltiples localizaciones.
         """
@@ -664,22 +674,23 @@ class EVAQUACalculator:
                 
             results = []
             for d in data:
-                results.append(self._process_meteo_json(d))
+                results.append(EVAQUACalculator._process_meteo_json(d))
                 
             return results
             
         except Exception as e:
             logger.error(f"⚠️ Error batch Open-Meteo: {e}")
             # Retornar vacíos
-            return [self._process_meteo_json({}) for _ in lats]
+            return [EVAQUACalculator._process_meteo_json({}) for _ in lats]
 
-    def _process_meteo_json(self, data):
+    @staticmethod
+    def _process_meteo_json(data):
         """Procesa un JSON de respuesta de Open-Meteo a nuestro formato"""
         try:
             hourly = data.get('hourly', {})
             daily = data.get('daily', {})
             
-            if not hourly: return self._empty_climate_dict()
+            if not hourly: return EVAQUACalculator._empty_climate_dict()
 
             temps_hourly = hourly.get('temperature_2m', [])
             temps_daily = daily.get('temperature_2m_max', [])
@@ -707,9 +718,10 @@ class EVAQUACalculator:
                 'precip_series': hourly.get('precipitation', [])[:72] if hourly else []
             }
         except:
-             return self._empty_climate_dict()
+             return EVAQUACalculator._empty_climate_dict()
 
-    def _empty_climate_dict(self):
+    @staticmethod
+    def _empty_climate_dict():
         return {
             'temp_current': 0, 'temp_avg_today': 0, 'temp_max_today': 0,
             'precip_24h': 0, 'precip_72h': 0, 'rain_24h': 0,
