@@ -148,8 +148,16 @@ class EVAQUACalculator:
                 logger.info("🌊 Cargando cuencas hidrográficas...")
                 try:
                     self.cuencas_gdf = load_shapefile_cached(cuencas_file)
-                    # self.cuencas_gdf = self.cuencas_gdf.to_crs(epsg=4326)
                     logger.info(f"✅ {len(self.cuencas_gdf)} cuencas cargadas")
+                    
+                    # Recortar cuencas a territorio de Aysén
+                    logger.info("✂️ Recortando cuencas a región de Aysén...")
+                    if self.cuencas_gdf.crs != aysen_gdf.crs:
+                        self.cuencas_gdf = self.cuencas_gdf.to_crs(aysen_gdf.crs)
+                    
+                    self.cuencas_gdf = gpd.overlay(self.cuencas_gdf, aysen_gdf[['geometry']], how='intersection')
+                    self.cuencas_gdf = self.cuencas_gdf[~self.cuencas_gdf.geometry.is_empty]
+                    logger.info(f"✅ {len(self.cuencas_gdf)} cuencas en región de Aysén")
                 except Exception as e:
                     logger.error(f"❌ Error loading cuencas: {e}")
             
@@ -198,6 +206,10 @@ class EVAQUACalculator:
                 # Eliminar geometrías vacías
                 subcuencas_chile = subcuencas_chile[~subcuencas_chile.geometry.is_empty]
                 logger.info(f"✅ {len(subcuencas_chile)} subcuencas recortadas en territorio chileno")
+                
+                # IMPORTANTE: Actualizar self.subcuencas_gdf con las recortadas
+                # para que el mapa solo muestre las de Aysén
+                self.subcuencas_gdf = subcuencas_chile
                 
                 # Generar HRUs con criterios hidrológicos (Static Method)
                 self.grids_gdf = HRUGenerator.generate_hrus(
