@@ -41,26 +41,32 @@ def init_evaqua():
     """Inicializa calculador EVAQUA"""
     return EVAQUACalculator()
 
-@st.cache_resource(show_spinner="Cargando modelos hidrológicos y climáticos...", ttl=3600)
+@st.cache_resource(show_spinner=False, ttl=3600)
 def load_evaqua_analysis():
     """Carga análisis completo de EVAQUA con caché persistente"""
-    calculator = init_evaqua()
-    
-    import os
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    data_dir = os.path.join(base_dir, "data")
-    
-    glaciers_shp = os.path.join("data", "glaciares", "Glaciares_aysen-magallanes.shp")
-    regions_shp = os.path.join("data", "region", "P00_RegProvCom_SIRGAS2000_fat.shp")
-    cuencas_file = os.path.join("data", "cuencas", "cuencas.geojson")
-    subcuencas_file = os.path.join("data", "subcuencas", "Subcuencas_Aysen_Magallanes.shp")
-    
-    # Ejecutar análisis solo si no está en caché
-    results_gdf = calculator.run_full_analysis(glaciers_shp, regions_shp,
-                                                cuencas_file=cuencas_file,
-                                                subcuencas_file=subcuencas_file)
-    
-    return calculator, results_gdf
+    try:
+        calculator = init_evaqua()
+        
+        import os
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        data_dir = os.path.join(base_dir, "data")
+        
+        glaciers_shp = os.path.join("data", "glaciares", "Glaciares_aysen-magallanes.shp")
+        regions_shp = os.path.join("data", "region", "P00_RegProvCom_SIRGAS2000_fat.shp")
+        cuencas_file = os.path.join("data", "cuencas", "cuencas.geojson")
+        subcuencas_file = os.path.join("data", "subcuencas", "Subcuencas_Aysen_Magallanes.shp")
+        
+        # Ejecutar análisis solo si no está en caché
+        results_gdf = calculator.run_full_analysis(glaciers_shp, regions_shp,
+                                                    cuencas_file=cuencas_file,
+                                                    subcuencas_file=subcuencas_file)
+        
+        return calculator, results_gdf
+    except Exception as e:
+        logger.error(f"Error loading EVAQUA analysis: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise
 
 # ==================== TEMA Y ESTILO ====================
 
@@ -270,15 +276,16 @@ def main():
     """, unsafe_allow_html=True)
     
     # Cargar datos
-    # Cargar datos
     # Cache clear removido para evitar recarga constante
     # st.cache_resource.clear()
     
     try:
-        calculator, results_gdf = load_evaqua_analysis()
+        with st.spinner("🔄 Cargando modelos hidrológicos y datos climáticos..."):
+            calculator, results_gdf = load_evaqua_analysis()
         
         if results_gdf is None or results_gdf.empty:
             st.error("❌ Error al cargar datos")
+            st.info("Por favor, intenta recargar la página o contacta al administrador.")
             return
         
         # Configuración por defecto de capas (sin sidebar)
