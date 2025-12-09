@@ -9,3 +9,4 @@ requests
 google-generativeai
 matplotlib
 shapely
+google-genai
