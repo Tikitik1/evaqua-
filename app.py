@@ -84,7 +84,46 @@ def load_evaqua_analysis():
         # Riesgo (requiere melt_df y runoff_df)
         risk_df = calculator.calculate_flood_risk(melt_df, runoff_df)
         
-        results_gdf = calculator.get_results()
+        # Combinar resultados (igual que run_full_analysis)
+        calculator.results_gdf = calculator.grids_gdf.copy()
+        
+        # Merge Climate
+        if calculator.climate_data is not None and not calculator.climate_data.empty:
+            if 'grid_id' in calculator.climate_data.columns:
+                calculator.results_gdf = calculator.results_gdf.merge(calculator.climate_data, on='grid_id', how='left')
+        
+        # Merge Topo
+        if calculator.topo_data is not None and not calculator.topo_data.empty:
+            if 'grid_id' in calculator.topo_data.columns:
+                calculator.results_gdf = calculator.results_gdf.merge(calculator.topo_data, on='grid_id', how='left')
+        
+        # Merge Melt
+        if melt_df is not None and not melt_df.empty:
+            cols_to_drop = [c for c in melt_df.columns if c in calculator.results_gdf.columns and c != 'grid_id']
+            if cols_to_drop:
+                calculator.results_gdf = calculator.results_gdf.drop(columns=cols_to_drop)
+            calculator.results_gdf = calculator.results_gdf.merge(melt_df, on='grid_id', how='left')
+        
+        # Merge Runoff
+        if runoff_df is not None and not runoff_df.empty:
+            calculator.results_gdf = calculator.results_gdf.merge(runoff_df, on='grid_id', how='left')
+        
+        # Merge Risk
+        if risk_df is not None and not risk_df.empty:
+            calculator.results_gdf = calculator.results_gdf.merge(risk_df, on='grid_id', how='left')
+        
+        # Proyección 3D
+        proj_df = calculator.calculate_projected_risk_3d(melt_df, runoff_df)
+        if proj_df is not None and not proj_df.empty:
+            cols_to_drop = [c for c in proj_df.columns if c in calculator.results_gdf.columns and c != 'grid_id']
+            if cols_to_drop:
+                calculator.results_gdf = calculator.results_gdf.drop(columns=cols_to_drop)
+            calculator.results_gdf = calculator.results_gdf.merge(proj_df, on='grid_id', how='left')
+        
+        # Identificar zonas de inundación
+        calculator._identify_flood_zones()
+        
+        results_gdf = calculator.results_gdf
         
         progress_placeholder.success("✅ Datos cargados exitosamente")
         
