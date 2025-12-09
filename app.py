@@ -648,15 +648,25 @@ def render_map_tab(results_gdf, layers, calculator):
         control=True
     ).add_to(m)
     
-    # === CAPA 1: GLACIARES (Fondo) ===
+    # === CAPA 1: GLACIARES (Fondo) - OPTIMIZADO ===
     if layers.get('glaciers', True) and calculator.glaciers_gdf is not None:
         try:
-            # Mostrar todos los glaciares (advertencia de rendimiento implícita)
-            glaciers_to_show = calculator.glaciers_gdf
+            # OPTIMIZACIÓN AGRESIVA: Limitar número de glaciares y simplificar más
+            glaciers_to_show = calculator.glaciers_gdf.copy()
             
-            # OPTIMIZACIÓN: Simplificar geometría ligeramente para reducir tamaño del mensaje
-            glaciers_to_show = glaciers_to_show.copy()
-            glaciers_to_show['geometry'] = glaciers_to_show.simplify(0.0001)
+            # Solo mostrar glaciares grandes (> 0.1 km²) para reducir carga
+            if 'area_in_grid' in glaciers_to_show.columns:
+                glaciers_to_show = glaciers_to_show[glaciers_to_show['area_in_grid'] > 100000]  # > 0.1 km²
+            
+            # Limitar a máximo 500 glaciares más grandes
+            if len(glaciers_to_show) > 500:
+                if 'area_in_grid' in glaciers_to_show.columns:
+                    glaciers_to_show = glaciers_to_show.nlargest(500, 'area_in_grid')
+                else:
+                    glaciers_to_show = glaciers_to_show.head(500)
+            
+            # Simplificar geometría AGRESIVAMENTE (0.001 grados ≈ 100m)
+            glaciers_to_show['geometry'] = glaciers_to_show.simplify(0.001)
 
             folium.GeoJson(
                 glaciers_to_show,
@@ -672,10 +682,14 @@ def render_map_tab(results_gdf, layers, calculator):
         except Exception as e:
             pass # logger.warning(f"No se pudo cargar capa glaciares: {e}")
 
-    # === CAPA 2: CUENCAS (Medio) ===
+    # === CAPA 2: CUENCAS (Medio) - OPTIMIZADO ===
     if layers.get('watershed', False) and calculator.cuencas_gdf is not None:
+         # Simplificar geometría
+         cuencas_simplified = calculator.cuencas_gdf.copy()
+         cuencas_simplified['geometry'] = cuencas_simplified.simplify(0.001)
+         
          folium.GeoJson(
-            calculator.cuencas_gdf,
+            cuencas_simplified,
             name='Cuencas',
             style_function=lambda x: {
                 'fillColor': 'transparent',
@@ -686,11 +700,14 @@ def render_map_tab(results_gdf, layers, calculator):
             tooltip=folium.GeoJsonTooltip(fields=['nom_cuen'], aliases=['Cuenca:'])
          ).add_to(m)
 
-    # === CAPA 3: SUBCUENCAS (Medio-Alto) ===
+    # === CAPA 3: SUBCUENCAS (Medio-Alto) - OPTIMIZADO ===
     if layers.get('subwatershed', True) and calculator.subcuencas_gdf is not None:
-         # Estilo más fino para subcuencas
+         # Simplificar geometría
+         subcuencas_simplified = calculator.subcuencas_gdf.copy()
+         subcuencas_simplified['geometry'] = subcuencas_simplified.simplify(0.001)
+         
          folium.GeoJson(
-            calculator.subcuencas_gdf,
+            subcuencas_simplified,
             name='Subcuencas',
             style_function=lambda x: {
                 'fillColor': 'transparent',
@@ -701,8 +718,11 @@ def render_map_tab(results_gdf, layers, calculator):
             tooltip=folium.GeoJsonTooltip(fields=['NOM_SUBC'], aliases=['Subcuenca:'])
          ).add_to(m)
 
-    # === CAPA 4: HRUs (RIESGO) - ENCIMA ===
+    # === CAPA 4: HRUs (RIESGO) - ENCIMA - OPTIMIZADO ===
     if layers.get('hru_risk', True):
+        # Simplificar geometrías de HRUs
+        results_gdf_simplified = results_gdf.copy()
+        results_gdf_simplified['geometry'] = results_gdf_simplified.simplify(0.001)
         # Función de estilo
         def style_function(feature):
             risk_class = feature['properties'].get('risk_class', 'bajo')
@@ -763,7 +783,7 @@ def render_map_tab(results_gdf, layers, calculator):
         )
         
         folium.GeoJson(
-            results_gdf,
+            results_gdf_simplified,
             name='Riesgo por HRU',
             style_function=style_function,
             highlight_function=highlight_function,
