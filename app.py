@@ -74,9 +74,15 @@ def load_evaqua_analysis():
         
         # Paso 4: Cálculos finales
         progress_placeholder.info("⚙️ Calculando riesgos (4/4)...")
-        calculator.calculate_melt()
-        calculator.calculate_runoff()
-        calculator.calculate_risk()
+        
+        # Derretimiento (retorna DataFrame)
+        melt_df = calculator.calculate_melt()
+        
+        # Escorrentía (requiere melt_df)
+        runoff_df = calculator.calculate_runoff(melt_df)
+        
+        # Riesgo (requiere melt_df y runoff_df)
+        risk_df = calculator.calculate_flood_risk(melt_df, runoff_df)
         
         results_gdf = calculator.get_results()
         
